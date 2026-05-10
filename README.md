@@ -1,6 +1,6 @@
 # CI/CD Enabled Application Health & Deployment Tracker
 
-This project demonstrates a real-world DevOps workflow by building and deploying a lightweight web application that exposes application health and deployment metadata, with fully automated CI/CD using GitHub Actions and Docker on AWS EC2.
+This project demonstrates a real-world DevOps workflow by building and deploying a lightweight web application that exposes application health and deployment metadata, with fully automated CI/CD using GitHub Actions and Docker on AWS EC2, plus Kubernetes and Terraform on AWS EKS.
 
 The focus of this project is not application complexity, but **deployment automation, versioning, and infrastructure understanding**, which are core DevOps responsibilities.
 
@@ -17,6 +17,9 @@ The focus of this project is not application complexity, but **deployment automa
 - Containerized using Docker
 - Automated CI/CD pipeline using GitHub Actions
 - Deployment to AWS EC2 via SSH
+- Local Kubernetes deployment on Minikube
+- Production Kubernetes deployment on AWS EKS
+- Infrastructure provisioning with Terraform
 - Secure handling of credentials using GitHub Secrets
 
 ---
@@ -26,7 +29,8 @@ The focus of this project is not application complexity, but **deployment automa
 - **Backend:** Node.js, Express
 - **Containerization:** Docker
 - **CI/CD:** GitHub Actions
-- **Cloud:** AWS EC2
+- **Cloud:** AWS EC2, AWS EKS
+- **IaC:** Terraform
 - **Version Control:** Git & GitHub
 - **Monitoring (basic):** Application health endpoint
 
@@ -42,9 +46,27 @@ app-health-deployment-tracker/
 ├── Dockerfile
 ├── .dockerignore
 ├── .gitignore
+├── k8s/
+│   ├── local/
+│   │   ├── configmap.yaml
+│   │   ├── deployment.yaml
+│   │   └── service.yaml
+│   └── prod/
+│       ├── configmap.yaml
+│       ├── deployment.yaml
+│       └── service.yaml
+├── terraform/
+│   ├── eks.tf
+│   ├── iam.tf
+│   ├── outputs.tf
+│   ├── provider.tf
+│   ├── security-groups.tf
+│   ├── terraform.tfvars
+│   ├── variables.tf
+│   └── vpc.tf
 └── .github/
-    └── workflows/
-        └── deploy.yml
+  └── workflows/
+    └── deploy.yml
 ```
 
 ---
@@ -200,3 +222,75 @@ After this, all deployments are fully automated via CI/CD.
 - Project successfully deployed
 - CI/CD pipeline working
 - Real-world DevOps issues identified and resolved
+
+---
+
+## Kubernetes (Local - Minikube)
+
+Local manifests are in [k8s/local/deployment.yaml](k8s/local/deployment.yaml), [k8s/local/service.yaml](k8s/local/service.yaml), and [k8s/local/configmap.yaml](k8s/local/configmap.yaml).
+
+### Steps
+
+```powershell
+minikube start
+minikube docker-env --shell powershell | Invoke-Expression
+docker build -t app-health-tracker:1.0.0 .
+kubectl apply -f k8s\local\configmap.yaml
+kubectl apply -f k8s\local\deployment.yaml
+kubectl apply -f k8s\local\service.yaml
+minikube service app-health-tracker --url
+```
+
+---
+
+## Terraform (AWS EKS)
+
+Terraform code is in [terraform](terraform) and provisions VPC, subnets, security groups, IAM roles, and EKS.
+
+### Steps
+
+```powershell
+cd terraform
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+---
+
+## Kubernetes (Production - AWS EKS)
+
+Production manifests are in [k8s/prod/deployment.yaml](k8s/prod/deployment.yaml), [k8s/prod/service.yaml](k8s/prod/service.yaml), and [k8s/prod/configmap.yaml](k8s/prod/configmap.yaml).
+
+### Steps
+
+```powershell
+aws eks update-kubeconfig --name app-health-tracker-eks --region us-east-1
+kubectl get nodes
+
+# Build and push to ECR (replace with your account id)
+aws ecr create-repository --repository-name app-health-tracker --region us-east-1
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+docker build -t app-health-tracker:1.0.0 .
+docker tag app-health-tracker:1.0.0 <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/app-health-tracker:1.0.0
+docker push <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/app-health-tracker:1.0.0
+
+# Update image in prod deployment to your ECR URI, then apply
+kubectl apply -f k8s\prod\configmap.yaml
+kubectl apply -f k8s\prod\deployment.yaml
+kubectl apply -f k8s\prod\service.yaml
+kubectl get svc app-health-tracker
+```
+
+---
+
+## Cleanup (Avoid Charges)
+
+```powershell
+kubectl delete -f k8s\prod\service.yaml
+kubectl delete -f k8s\prod\deployment.yaml
+kubectl delete -f k8s\prod\configmap.yaml
+aws ecr delete-repository --repository-name app-health-tracker --region us-east-1 --force
+cd terraform
+terraform destroy
+```

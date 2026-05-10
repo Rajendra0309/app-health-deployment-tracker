@@ -10,3 +10,10 @@ npm-debug.log
 
 # OS files
 .DS_Store
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.*
+tfplan
