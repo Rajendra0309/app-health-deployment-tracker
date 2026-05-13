@@ -17,3 +17,6 @@ npm-debug.log
 *.tfstate.backup
 *.tfstate.*
 tfplan
+
+# Docs
+docs/deployment.tex
